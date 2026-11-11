@@ -14,3 +14,9 @@ def root():
         "message": " Hello, World!Wardrobe AI API está funcionando!",
         "status": "online"
     }
+    
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy"
+    }
