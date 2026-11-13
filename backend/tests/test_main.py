@@ -14,7 +14,7 @@ def test_root_endpoint():
     assert response.status_code == 200
     # verificamos se o conteudo retornado é exatamente o esperado
     assert response.json() == {
-        "message": " Hello, World! Wardrobe AI API está funcionando!",
+        "message": "Hello, World! Wardrobe AI API está funcionando!",
         "status": "online",
     }
 
@@ -23,4 +23,4 @@ def test_health_endpoint():
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "healthy"}
+    assert response.json() == {"status": "healthy", "database": "connected"}

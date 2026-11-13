@@ -22,3 +22,5 @@ venv/
 # Sistema operacional
 .DS_Store
 Thumbs.db
+# Metadados gerados pelo Python
+*.egg-info/
