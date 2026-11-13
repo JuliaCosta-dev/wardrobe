@@ -7,9 +7,11 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 #BaseSettings lê as variáveis de ambiente
 class Settings(BaseSettings):
+    # recebem os valores do .env
     postgres_db: str
     postgres_user: str
     postgres_password: str
+    # tem valores padrão
     postgres_host: str = "127.0.0.1"
     postgres_port: int = 5433
     
