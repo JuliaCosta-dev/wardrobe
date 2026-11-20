@@ -12,8 +12,11 @@ DATABASE_URL = URL.create(
     password=settings.postgres_password,
     host=settings.postgres_host,
     port=settings.postgres_port,
-    database=settings.postgres_db
+    database=settings.postgres_db,
 )
+
+# monta o banco de testes, sem modificar o banco principal
+TEST_DATABASE_URL = DATABASE_URL.set(database=settings.postgres_test_db)
 
 # Gerencia as conexões com o PostgreSQL
 engine = create_engine(
@@ -29,14 +32,16 @@ SessionLocal = sessionmaker(
     autocommit=False,
 )
 
+
 # Classe-base dos futuros modelos ORM
 class Base(DeclarativeBase):
     pass
 
+
 # Disponibiliza uma sessão e garante seu fechamento
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
-    
+
     try:
         yield db
     finally:
