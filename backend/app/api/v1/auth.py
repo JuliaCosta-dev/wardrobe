@@ -80,7 +80,8 @@ def register(
     data: UserRegister,
     db: Annotated[Session, Depends(get_db)],
 ) -> TokenResponse:
-    """Registra um usuário, cria seu perfil e gera os tokens."""
+    """Cria uma conta, seu perfil e os respectivos tokens."""
+
     existing_user = db.scalar(select(User).where(User.email == data.email))
 
     if existing_user:
@@ -94,16 +95,16 @@ def register(
         password_hash=hash_password(data.password),
     )
 
-    profile = Profile(
-        display_name=data.display_name,
-    )
-
-    # O relacionamento ORM associa automaticamente o perfil ao usuário.
-    user.profile = profile
-
-    db.add(user)
-
     try:
+        db.add(user)
+        db.flush()
+
+        profile = Profile(
+            user_id=user.id,
+            display_name=data.display_name,
+        )
+
+        db.add(profile)
         db.commit()
         db.refresh(user)
 
@@ -127,6 +128,7 @@ def login(
     db: Annotated[Session, Depends(get_db)],
 ) -> TokenResponse:
     """Autentica um usuário com e-mail e senha."""
+
     user = db.scalar(select(User).where(User.email == data.email))
 
     if user is None or not verify_password(data.password, user.password_hash) or not user.is_active:
@@ -220,6 +222,7 @@ def logout(
     db: Annotated[Session, Depends(get_db)],
 ) -> Response:
     """Revoga uma sessão utilizando seu refresh token."""
+
     token_hash = hash_refresh_token(data.refresh_token)
 
     session = db.scalar(select(RefreshSession).where(RefreshSession.token_hash == token_hash))

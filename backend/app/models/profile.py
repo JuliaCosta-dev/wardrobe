@@ -1,14 +1,26 @@
+from __future__ import annotations
+
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Uuid, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    String,
+    Uuid,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.garment import Garment
     from app.models.user import User
 
 
@@ -55,7 +67,7 @@ class Profile(Base):
         nullable=True,
     )
 
-    preferences: Mapped[dict] = mapped_column(
+    preferences: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
@@ -75,7 +87,25 @@ class Profile(Base):
         onupdate=func.now(),
     )
 
-    user: Mapped["User"] = relationship(
+    user: Mapped[User] = relationship(
         "User",
         back_populates="profile",
+    )
+
+    garments: Mapped[list[Garment]] = relationship(
+        "Garment",
+        back_populates="profile",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "latitude IS NULL OR latitude BETWEEN -90 AND 90",
+            name="ck_profiles_latitude_range",
+        ),
+        CheckConstraint(
+            "longitude IS NULL OR longitude BETWEEN -180 AND 180",
+            name="ck_profiles_longitude_range",
+        ),
     )

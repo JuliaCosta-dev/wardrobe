@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from datetime import datetime
-from uuid import uuid4
+from typing import TYPE_CHECKING
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Boolean,
@@ -15,21 +18,24 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.profile import Profile
 
 
 class Garment(Base):
     __tablename__ = "garments"
 
-    id: Mapped[uuid4] = mapped_column(
+    id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         primary_key=True,
         default=uuid4,
     )
 
-    profile_id: Mapped[uuid4] = mapped_column(
+    profile_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("profiles.id", ondelete="CASCADE"),
         nullable=False,
@@ -55,7 +61,7 @@ class Garment(Base):
         nullable=True,
     )
 
-    colors: Mapped[list] = mapped_column(
+    colors: Mapped[list[str]] = mapped_column(
         JSONB,
         nullable=False,
         default=list,
@@ -72,14 +78,14 @@ class Garment(Base):
         nullable=True,
     )
 
-    season_tags: Mapped[list] = mapped_column(
+    season_tags: Mapped[list[str]] = mapped_column(
         JSONB,
         nullable=False,
         default=list,
         server_default=text("'[]'::jsonb"),
     )
 
-    occasion_tags: Mapped[list] = mapped_column(
+    occasion_tags: Mapped[list[str]] = mapped_column(
         JSONB,
         nullable=False,
         default=list,
@@ -117,7 +123,7 @@ class Garment(Base):
         Boolean,
         nullable=False,
         default=False,
-        server_default="false",
+        server_default=text("false"),
     )
 
     notes: Mapped[str | None] = mapped_column(
@@ -138,6 +144,18 @@ class Garment(Base):
         onupdate=func.now(),
     )
 
+    profile: Mapped[Profile] = relationship(
+        "Profile",
+        back_populates="garments",
+    )
+
+    images: Mapped[list[GarmentImage]] = relationship(
+        "GarmentImage",
+        back_populates="garment",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     __table_args__ = (
         CheckConstraint(
             "formality IS NULL OR formality BETWEEN 1 AND 4",
@@ -155,22 +173,34 @@ class Garment(Base):
             "fit_preference IS NULL OR fit_preference IN ('tight', 'regular', 'loose')",
             name="ck_garments_fit_preference",
         ),
-        Index("ix_garments_profile_category", "profile_id", "category"),
-        Index("ix_garments_profile_status", "profile_id", "status"),
-        Index("ix_garments_profile_created", "profile_id", "created_at"),
+        Index(
+            "ix_garments_profile_category",
+            "profile_id",
+            "category",
+        ),
+        Index(
+            "ix_garments_profile_status",
+            "profile_id",
+            "status",
+        ),
+        Index(
+            "ix_garments_profile_created",
+            "profile_id",
+            "created_at",
+        ),
     )
 
 
 class GarmentImage(Base):
     __tablename__ = "garment_images"
 
-    id: Mapped[uuid4] = mapped_column(
+    id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         primary_key=True,
         default=uuid4,
     )
 
-    garment_id: Mapped[uuid4] = mapped_column(
+    garment_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("garments.id", ondelete="CASCADE"),
         nullable=False,
@@ -200,11 +230,16 @@ class GarmentImage(Base):
         Boolean,
         nullable=False,
         default=False,
-        server_default="false",
+        server_default=text("false"),
     )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+    garment: Mapped[Garment] = relationship(
+        "Garment",
+        back_populates="images",
     )
