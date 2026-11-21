@@ -126,5 +126,8 @@ class GarmentList(BaseModel):
     limit: int
 
 
-# permite enviar somente os campos que a pessoa deseja altera. 
-# Por exemplo, mudar a cor nõo exige reenviar o nome, a categoria e todos os demais atributos.
+# permite enviar somente os campos 
+# que a pessoa deseja altera. 
+# Por exemplo, mudar a cor nõo exige 
+# reenviar o nome, a categoria e todos os 
+# demais atributos.
