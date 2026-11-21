@@ -23,6 +23,7 @@ jobs:
   backend:
     name: Backend checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -51,7 +52,6 @@ jobs:
       POSTGRES_DB: wardrobe_ai
       POSTGRES_TEST_DB: wardrobe_ai_test
       JWT_SECRET_KEY: ci-only-secret-key-not-for-production
-      TEST_DATABASE_URL: postgresql+psycopg://wardrobe:wardrobe_ci_password@localhost:5432/wardrobe_ai_test
 
     steps:
       - name: Checkout repository
@@ -83,8 +83,11 @@ jobs:
       - name: Check formatting with Ruff
         run: python -m ruff format --check .
 
-      - name: Check Alembic migrations
+      - name: Apply database migrations
         run: python -m alembic upgrade head
+
+      - name: Check migration consistency
+        run: python -m alembic check
 
       - name: Run tests
         run: python -m pytest -v

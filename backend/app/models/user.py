@@ -1,14 +1,17 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, String, Uuid, func
+from sqlalchemy import Boolean, DateTime, String, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.profile import Profile
+    from app.models.refresh_session import RefreshSession
 
 
 class User(Base):
@@ -24,7 +27,6 @@ class User(Base):
         String(254),
         nullable=False,
         unique=True,
-        index=True,
     )
 
     password_hash: Mapped[str] = mapped_column(
@@ -36,7 +38,7 @@ class User(Base):
         Boolean,
         nullable=False,
         default=True,
-        server_default="true",
+        server_default=text("true"),
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -52,9 +54,18 @@ class User(Base):
         onupdate=func.now(),
     )
 
-    profile: Mapped["Profile"] = relationship(
+    profile: Mapped[Profile] = relationship(
         "Profile",
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
+        single_parent=True,
+        passive_deletes=True,
+    )
+
+    refresh_sessions: Mapped[list[RefreshSession]] = relationship(
+        "RefreshSession",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )

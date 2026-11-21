@@ -1,10 +1,23 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Uuid, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Uuid,
+    func,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class RefreshSession(Base):
@@ -50,7 +63,18 @@ class RefreshSession(Base):
         server_default=func.now(),
     )
 
+    user: Mapped[User] = relationship(
+        "User",
+        back_populates="refresh_sessions",
+    )
+
     __table_args__ = (
-        Index("ix_refresh_sessions_user_id", "user_id"),
-        Index("ix_refresh_sessions_expires_at", "expires_at"),
+        Index(
+            "ix_refresh_sessions_user_id",
+            "user_id",
+        ),
+        Index(
+            "ix_refresh_sessions_expires_at",
+            "expires_at",
+        ),
     )
