@@ -1,0 +1,71 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import TYPE_CHECKING
+from uuid import UUID, uuid4
+
+from sqlalchemy import Boolean, DateTime, String, Uuid, func, text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.profile import Profile
+    from app.models.refresh_session import RefreshSession
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+
+    email: Mapped[str] = mapped_column(
+        String(254),
+        nullable=False,
+        unique=True,
+    )
+
+    password_hash: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    profile: Mapped[Profile] = relationship(
+        "Profile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+        single_parent=True,
+        passive_deletes=True,
+    )
+
+    refresh_sessions: Mapped[list[RefreshSession]] = relationship(
+        "RefreshSession",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
