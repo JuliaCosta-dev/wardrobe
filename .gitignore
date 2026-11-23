@@ -24,3 +24,5 @@ venv/
 Thumbs.db
 # Metadados gerados pelo Python
 *.egg-info/
+# Wardrobe AI - imagens privadas enviadas pelos usuários
+backend/storage/
