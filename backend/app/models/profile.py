@@ -21,6 +21,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.garment import Garment
+    from app.models.outfit import Outfit
     from app.models.user import User
 
 
@@ -94,6 +95,13 @@ class Profile(Base):
 
     garments: Mapped[list[Garment]] = relationship(
         "Garment",
+        back_populates="profile",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    outfits: Mapped[list[Outfit]] = relationship(
+        "Outfit",
         back_populates="profile",
         cascade="all, delete-orphan",
         passive_deletes=True,
