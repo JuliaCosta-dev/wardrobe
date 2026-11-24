@@ -1,3 +1,4 @@
+import hashlib
 from typing import Annotated
 from uuid import UUID
 
@@ -6,6 +7,7 @@ from fastapi import (
     Depends,
     File,
     Form,
+    Header,
     HTTPException,
     UploadFile,
     status,
@@ -105,8 +107,17 @@ def read_garment_image(
     image_id: UUID,
     db: DatabaseSession,
     profile: AuthenticatedProfile,
+    if_none_match: Annotated[
+        str | None,
+        Header(alias="If-None-Match"),
+    ] = None,
 ) -> Response:
-    """Entrega os bytes de uma imagem após validar sua propriedade."""
+    """
+    Entrega os bytes de uma imagem após validar sua propriedade.
+
+    Implementa ETag para permitir que o navegador reutilize
+    imagens armazenadas em cache sem baixar novamente os bytes.
+    """
 
     try:
         image, content = garment_image_service.get_image(
@@ -122,14 +133,33 @@ def read_garment_image(
     ) as error:
         raise handle_not_found(error) from None
 
+    # Identifica o conteúdo da imagem.
+    etag_value = hashlib.sha256(content).hexdigest()
+    etag = f'"{etag_value}"'
+
+    headers = {
+        "Cache-Control": "private, no-cache, must-revalidate",
+        "ETag": etag,
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": 'inline; filename="garment.webp"',
+        "Vary": "Authorization",
+    }
+
+    # Se o navegador já possui a mesma versão da imagem,
+    # devolvemos 304 sem enviar novamente os bytes.
+    if if_none_match:
+        received_etags = [value.strip() for value in if_none_match.split(",")]
+
+        if etag in received_etags or "*" in received_etags:
+            return Response(
+                status_code=status.HTTP_304_NOT_MODIFIED,
+                headers=headers,
+            )
+
     return Response(
         content=content,
         media_type=image.mime_type,
-        headers={
-            "Cache-Control": "private, no-store",
-            "X-Content-Type-Options": "nosniff",
-            "Content-Disposition": 'inline; filename="garment.webp"',
-        },
+        headers=headers,
     )
 
 
