@@ -467,3 +467,60 @@ def test_outfit_list_rejects_invalid_limit(client):
     )
 
     assert response.status_code == 422
+
+
+def test_generated_outfit_includes_garment_primary_image(client):
+    from io import BytesIO
+
+    from PIL import Image
+
+    headers = create_user(
+        client,
+        "outfit-primary-image@example.com",
+    )
+
+    garments = create_complete_closet(client, headers)
+
+    garment_id = garments[0]["id"]
+
+    image = Image.new(
+        "RGB",
+        (100, 150),
+        color=(30, 80, 160),
+    )
+
+    output = BytesIO()
+    image.save(output, format="PNG")
+
+    uploaded = client.post(
+        f"/api/v1/garments/{garment_id}/images",
+        headers=headers,
+        files={
+            "file": (
+                "garment.png",
+                output.getvalue(),
+                "image/png",
+            )
+        },
+        data={"is_primary": "true"},
+    )
+
+    assert uploaded.status_code == 201
+
+    generated = client.post(
+        "/api/v1/outfits/generate",
+        headers=headers,
+        json={},
+    )
+
+    assert generated.status_code == 201
+
+    outfit = generated.json()
+
+    garment_item = next(item for item in outfit["items"] if item["garment_id"] == garment_id)
+
+    primary_image = garment_item["garment"]["primary_image"]
+
+    assert primary_image is not None
+    assert primary_image["id"] == uploaded.json()["id"]
+    assert primary_image["url"] == (f"/api/v1/garments/{garment_id}/images/{uploaded.json()['id']}")

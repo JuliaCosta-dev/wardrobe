@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.deps import get_current_profile
@@ -43,6 +43,7 @@ def create_garment(
 
 
 # Lista as peças pertencentes ao perfil autenticado.
+# Lista as peças pertencentes ao perfil autenticado.
 @router.get("", response_model=GarmentList)
 def list_garments(
     profile: Annotated[Profile, Depends(get_current_profile)],
@@ -52,7 +53,11 @@ def list_garments(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
 ):
-    statement = select(Garment).where(Garment.profile_id == profile.id)
+    statement = (
+        select(Garment)
+        .where(Garment.profile_id == profile.id)
+        .options(selectinload(Garment.images))
+    )
 
     if category:
         statement = statement.where(Garment.category == category)
@@ -84,10 +89,12 @@ def get_garment(
     db: Annotated[Session, Depends(get_db)],
 ):
     garment = db.scalar(
-        select(Garment).where(
+        select(Garment)
+        .where(
             Garment.id == garment_id,
             Garment.profile_id == profile.id,
         )
+        .options(selectinload(Garment.images))
     )
 
     if garment is None:

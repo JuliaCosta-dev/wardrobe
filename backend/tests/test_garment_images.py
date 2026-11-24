@@ -112,6 +112,7 @@ def test_upload_garment_image(client):
     assert data["width"] == 100
     assert data["height"] == 100
     assert data["is_primary"] is True
+    assert data["url"] == (f"/api/v1/garments/{garment_id}/images/{data['id']}")
     assert "storage_key" not in data
 
 
@@ -158,6 +159,10 @@ def test_list_garment_images(client):
     assert response.status_code == 200
     assert len(response.json()) == 1
 
+    image_data = response.json()[0]
+
+    assert image_data["url"] == (f"/api/v1/garments/{garment_id}/images/{image_data['id']}")
+
 
 def test_read_garment_image(client):
     headers = create_user(client)
@@ -173,10 +178,62 @@ def test_read_garment_image(client):
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/webp"
-    assert response.headers["cache-control"] == "private, no-store"
+    assert response.headers["cache-control"] == ("private, no-cache, must-revalidate")
+    assert "etag" in response.headers
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.content.startswith(b"RIFF")
     assert response.content[8:12] == b"WEBP"
+
+
+def test_read_garment_image_returns_304_when_etag_matches(client):
+    headers = create_user(client)
+    garment_id = create_garment(client, headers)
+
+    uploaded = upload_image(
+        client,
+        headers,
+        garment_id,
+    )
+
+    image_id = uploaded.json()["id"]
+
+    first_response = client.get(
+        f"/api/v1/garments/{garment_id}/images/{image_id}",
+        headers=headers,
+    )
+
+    assert first_response.status_code == 200
+
+    etag = first_response.headers["etag"]
+
+    second_response = client.get(
+        f"/api/v1/garments/{garment_id}/images/{image_id}",
+        headers={
+            **headers,
+            "If-None-Match": etag,
+        },
+    )
+
+    assert second_response.status_code == 304
+    assert second_response.content == b""
+    assert second_response.headers["etag"] == etag
+
+
+def test_read_garment_image_requires_authentication(client):
+    headers = create_user(client)
+    garment_id = create_garment(client, headers)
+
+    uploaded = upload_image(
+        client,
+        headers,
+        garment_id,
+    )
+
+    image_id = uploaded.json()["id"]
+
+    response = client.get(f"/api/v1/garments/{garment_id}/images/{image_id}")
+
+    assert response.status_code == 401
 
 
 def test_invalid_image_is_rejected(client):

@@ -68,6 +68,125 @@ def test_list_garments(client):
     assert len(response.json()["items"]) == 1
 
 
+def test_garment_without_image_returns_null_primary_image(client):
+    token = create_user(client)
+    headers = auth_headers(token)
+
+    created = client.post(
+        "/api/v1/garments",
+        json=garment_payload(),
+        headers=headers,
+    )
+
+    assert created.status_code == 201
+    assert created.json()["primary_image"] is None
+
+
+def test_list_garments_returns_primary_image_metadata(client):
+    from io import BytesIO
+
+    from PIL import Image
+
+    token = create_user(client)
+    headers = auth_headers(token)
+
+    created = client.post(
+        "/api/v1/garments",
+        json=garment_payload(),
+        headers=headers,
+    )
+
+    garment_id = created.json()["id"]
+
+    image = Image.new("RGB", (100, 150), color=(30, 80, 160))
+    output = BytesIO()
+    image.save(output, format="PNG")
+
+    uploaded = client.post(
+        f"/api/v1/garments/{garment_id}/images",
+        headers=headers,
+        files={
+            "file": (
+                "shirt.png",
+                output.getvalue(),
+                "image/png",
+            )
+        },
+        data={"is_primary": "true"},
+    )
+
+    assert uploaded.status_code == 201
+
+    response = client.get(
+        "/api/v1/garments",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    garment = response.json()["items"][0]
+    primary_image = garment["primary_image"]
+
+    assert primary_image is not None
+    assert primary_image["id"] == uploaded.json()["id"]
+    assert primary_image["garment_id"] == garment_id
+    assert primary_image["mime_type"] == "image/webp"
+    assert primary_image["width"] == 100
+    assert primary_image["height"] == 150
+
+    assert primary_image["url"] == (f"/api/v1/garments/{garment_id}/images/{uploaded.json()['id']}")
+
+    assert "storage_key" not in primary_image
+
+
+def test_get_garment_returns_primary_image_metadata(client):
+    from io import BytesIO
+
+    from PIL import Image
+
+    token = create_user(client)
+    headers = auth_headers(token)
+
+    created = client.post(
+        "/api/v1/garments",
+        json=garment_payload(),
+        headers=headers,
+    )
+
+    garment_id = created.json()["id"]
+
+    image = Image.new("RGB", (100, 150), color=(30, 80, 160))
+    output = BytesIO()
+    image.save(output, format="PNG")
+
+    uploaded = client.post(
+        f"/api/v1/garments/{garment_id}/images",
+        headers=headers,
+        files={
+            "file": (
+                "shirt.png",
+                output.getvalue(),
+                "image/png",
+            )
+        },
+        data={"is_primary": "true"},
+    )
+
+    assert uploaded.status_code == 201
+
+    response = client.get(
+        f"/api/v1/garments/{garment_id}",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    primary_image = response.json()["primary_image"]
+
+    assert primary_image is not None
+    assert primary_image["id"] == uploaded.json()["id"]
+
+
 def test_update_garment(client):
     token = create_user(client)
     headers = auth_headers(token)

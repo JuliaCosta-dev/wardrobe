@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 GarmentCategory = Literal[
     "tops",
@@ -95,6 +95,30 @@ class GarmentUpdate(BaseModel):
         return self
 
 
+class GarmentPrimaryImageRead(BaseModel):
+    """
+    Metadados da imagem principal de uma peça.
+
+    Não expõe storage_key nem caminhos físicos do servidor.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    garment_id: UUID
+    mime_type: str
+    width: int | None
+    height: int
+
+    @computed_field
+    @property
+    def url(self) -> str:
+        """
+        Retorna a rota responsável por entregar os bytes da imagem.
+        """
+        return f"/api/v1/garments/{self.garment_id}/images/{self.id}"
+
+
 class GarmentRead(BaseModel):
     id: UUID
     name: str
@@ -115,6 +139,10 @@ class GarmentRead(BaseModel):
     notes: str | None
     created_at: datetime
     updated_at: datetime
+
+    # Metadados da imagem principal
+    # Será null quando a peça não possuir uma imagem principal
+    primary_image: GarmentPrimaryImageRead | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

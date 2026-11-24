@@ -121,7 +121,12 @@ def get_by_id(
     outfit_id: UUID,
     profile_id: UUID,
 ) -> Outfit | None:
-    """Busca um look com suas peças, respeitando o proprietário."""
+    """
+    Busca um look com suas peças e respectivas imagens.
+
+    Os relacionamentos são carregados antecipadamente
+    para evitar consultas adicionais durante a serialização.
+    """
 
     statement = (
         select(Outfit)
@@ -129,7 +134,9 @@ def get_by_id(
             Outfit.id == outfit_id,
             Outfit.profile_id == profile_id,
         )
-        .options(selectinload(Outfit.items).selectinload(OutfitItem.garment))
+        .options(
+            selectinload(Outfit.items).selectinload(OutfitItem.garment).selectinload(Garment.images)
+        )
     )
 
     return db.scalar(statement)
@@ -142,7 +149,12 @@ def list_by_profile(
     skip: int,
     limit: int,
 ) -> tuple[list[Outfit], int]:
-    """Lista looks válidos com paginação."""
+    """
+    Lista looks válidos com paginação.
+
+    Carrega as peças e suas imagens em consultas agrupadas,
+    evitando o problema N+1.
+    """
 
     base_statement = select(Outfit).where(
         Outfit.profile_id == profile_id,
@@ -154,7 +166,9 @@ def list_by_profile(
     total = db.scalar(total_statement) or 0
 
     statement = (
-        base_statement.options(selectinload(Outfit.items).selectinload(OutfitItem.garment))
+        base_statement.options(
+            selectinload(Outfit.items).selectinload(OutfitItem.garment).selectinload(Garment.images)
+        )
         .order_by(Outfit.generated_at.desc())
         .offset(skip)
         .limit(limit)

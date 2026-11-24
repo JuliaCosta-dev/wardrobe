@@ -212,3 +212,26 @@ GET /api/v1/outfits/{outfit_id}
 - Histórico de uso e avaliação dos looks.
 - Agendamento automático da limpeza de registros vencidos.
 - Motor de recomendações mais avançado.
+
+---
+
+# 12. `backend/app/docs/outfits.md`
+
+Se esse documento já existe, adicione a seguinte seção:
+
+```markdown
+## Imagens das peças nos looks
+
+Os endpoints:
+
+- GET /api/v1/outfits
+- GET /api/v1/outfits/{outfit_id}
+- POST /api/v1/outfits/generate
+
+Retornam os metadados da imagem principal de cada peça
+dentro de `items[].garment.primary_image`.
+
+A imagem é recuperada separadamente pela URL fornecida
+nos metadados.
+
+Os bytes não são incorporados à resposta JSON.

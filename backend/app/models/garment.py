@@ -156,6 +156,19 @@ class Garment(Base):
         passive_deletes=True,
     )
 
+    @property
+    def primary_image(self) -> GarmentImage | None:
+        """
+        Retorna a imagem principal da peça.
+
+        A relação images deve estar carregada previamente
+        para evitar consultas individuais durante a serialização.
+        """
+        return next(
+            (image for image in self.images if image.is_primary),
+            None,
+        )
+
     __table_args__ = (
         CheckConstraint(
             "formality IS NULL OR formality BETWEEN 1 AND 4",

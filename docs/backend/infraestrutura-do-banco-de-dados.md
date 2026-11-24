@@ -337,7 +337,7 @@ O `engine` gerencia as conexões entre a aplicação e o banco de dados.
 A opção:
 
 ```python
-pool_pre_ping=True
+pool_pre_ping = True
 ```
 
 permite verificar se uma conexão reutilizada pelo pool ainda está válida antes de utilizá-la.
@@ -374,8 +374,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 
 
-def example_endpoint(db: Session = Depends(get_db)):
-    ...
+def example_endpoint(db: Session = Depends(get_db)): ...
 ```
 
 O exemplo é ilustrativo e não representa um endpoint de negócio já implementado.
@@ -420,16 +419,13 @@ from app.database import engine
 app = FastAPI(
     title="Wardrobe AI",
     description="API para organização de guarda-roupa e recomendações de looks.",
-    version="0.1.0"
+    version="0.1.0",
 )
 
 
 @app.get("/")
 def root():
-    return {
-        "message": "Wardrobe AI API está funcionando!",
-        "status": "online"
-    }
+    return {"message": "Wardrobe AI API está funcionando!", "status": "online"}
 
 
 @app.get("/health")
@@ -438,18 +434,11 @@ def health_check():
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
 
-        return {
-            "status": "healthy",
-            "database": "connected"
-        }
+        return {"status": "healthy", "database": "connected"}
 
     except SQLAlchemyError:
         return JSONResponse(
-            status_code=503,
-            content={
-                "status": "unhealthy",
-                "database": "disconnected"
-            }
+            status_code=503, content={"status": "unhealthy", "database": "disconnected"}
         )
 ```
 
@@ -515,9 +504,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 
-database_url = DATABASE_URL.render_as_string(
-    hide_password=False
-)
+database_url = DATABASE_URL.render_as_string(hide_password=False)
 
 config.set_main_option(
     "sqlalchemy.url",
@@ -584,7 +571,7 @@ Quando os primeiros modelos forem implementados e importados corretamente, será
 A opção:
 
 ```python
-compare_type=True
+compare_type = True
 ```
 
 permite detectar alterações nos tipos das colunas durante a comparação.
