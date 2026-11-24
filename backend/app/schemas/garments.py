@@ -139,7 +139,7 @@ class GarmentRead(BaseModel):
     notes: str | None
     created_at: datetime
     updated_at: datetime
-    
+
     # Metadados da imagem principal
     # Será null quando a peça não possuir uma imagem principal
     primary_image: GarmentPrimaryImageRead | None = None
