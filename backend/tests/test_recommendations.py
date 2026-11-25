@@ -1,4 +1,3 @@
-
 def create_user(client, email: str) -> dict[str, str]:
     """Cria um usuário e devolve o cabeçalho de autenticação."""
 
