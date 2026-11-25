@@ -70,6 +70,9 @@ class OutfitRead(BaseModel):
     generated_at: datetime
     expires_at: datetime
     items: list[OutfitItemRead]
+    recommendation_score: float | None = None
+    recommendation_reasons: list[str] | None = None
+    weather_snapshot: dict | None = None
 
 
 class OutfitList(BaseModel):

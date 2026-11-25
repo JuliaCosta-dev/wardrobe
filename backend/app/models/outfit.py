@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Uuid,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -61,6 +63,26 @@ class Outfit(Base):
 
     formality: Mapped[int | None] = mapped_column(
         Integer,
+        nullable=True,
+    )
+
+    # Pontuação calculada pelo motor de recomendação.
+    # Pode permanecer nula para looks gerados pelo endpoint antigo.
+    recommendation_score: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    # Explicações legíveis sobre os motivos da recomendação.
+    recommendation_reasons: Mapped[list[str] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
+    # Retrato meteorológico utilizado no momento da recomendação.
+    # Não depende do cache externo para continuar disponível no histórico.
+    weather_snapshot: Mapped[dict | None] = mapped_column(
+        JSONB,
         nullable=True,
     )
 

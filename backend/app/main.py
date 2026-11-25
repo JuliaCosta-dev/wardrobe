@@ -8,6 +8,7 @@ from app.api.v1.garment_images import router as garment_images_router
 from app.api.v1.garments import router as garments_router
 from app.api.v1.outfits import router as outfits_router
 from app.api.v1.profile import router as profile_router
+from app.api.v1.recommendations import router as recommendations_router
 from app.database import engine
 
 app = FastAPI(
@@ -21,6 +22,7 @@ app.include_router(garments_router, prefix="/api/v1")
 app.include_router(profile_router, prefix="/api/v1")
 app.include_router(garment_images_router, prefix="/api/v1")
 app.include_router(outfits_router, prefix="/api/v1")
+app.include_router(recommendations_router, prefix="/api/v1")
 
 
 @app.get("/")
