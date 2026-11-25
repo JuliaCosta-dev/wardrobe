@@ -85,6 +85,8 @@ jobs:
 
       - name: Apply database migrations
         run: python -m alembic upgrade head
+        env:
+          MET_NO_USER_AGENT: ${{ secrets.MET_NO_USER_AGENT }}
 
       - name: Check migration consistency
         run: python -m alembic check
