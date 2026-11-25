@@ -1,0 +1,1 @@
+"""Integrações com provedores meteorológicos."""

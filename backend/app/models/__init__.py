@@ -3,6 +3,7 @@ from app.models.outfit import Outfit, OutfitItem
 from app.models.profile import Profile
 from app.models.refresh_session import RefreshSession
 from app.models.user import User
+from app.models.weather_cache import WeatherCache
 
 __all__ = [
     "User",
@@ -12,4 +13,5 @@ __all__ = [
     "GarmentImage",
     "Outfit",
     "OutfitItem",
+    "WeatherCache",
 ]

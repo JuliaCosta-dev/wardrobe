@@ -52,6 +52,7 @@ jobs:
       POSTGRES_DB: wardrobe_ai
       POSTGRES_TEST_DB: wardrobe_ai_test
       JWT_SECRET_KEY: ci-only-secret-key-not-for-production
+      MET_NO_USER_AGENT: ${{ secrets.MET_NO_USER_AGENT }}
 
     steps:
       - name: Checkout repository
@@ -85,9 +86,9 @@ jobs:
 
       - name: Apply database migrations
         run: python -m alembic upgrade head
-
+        
       - name: Check migration consistency
         run: python -m alembic check
-
+        
       - name: Run tests
         run: python -m pytest -v
