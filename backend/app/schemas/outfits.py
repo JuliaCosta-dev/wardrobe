@@ -7,7 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.garments import GarmentRead
 
 # Valores permitidos para os filtros de geração.
-# São compatíveis com os valores de referência usados no projeto.
 OutfitSeason = Literal[
     "spring",
     "summer",
@@ -20,8 +19,7 @@ class OutfitGenerateRequest(BaseModel):
     """
     Parâmetros opcionais para orientar a geração de um look.
 
-    O cliente não escolhe as peças.
-    O sistema seleciona as peças compatíveis no closet.
+    O cliente informa o contexto, mas não escolhe as peças.
     """
 
     model_config = ConfigDict(
@@ -53,8 +51,8 @@ class OutfitItemRead(BaseModel):
     garment_id: UUID
     role: str
 
-    # Devolve os dados da peça, sem expor storage_key,
-    # caminhos internos ou informações privadas de armazenamento.
+    # Expõe os dados públicos da peça, sem storage_key
+    # ou caminhos internos do armazenamento.
     garment: GarmentRead
 
 
@@ -69,7 +67,12 @@ class OutfitRead(BaseModel):
     formality: int | None
     generated_at: datetime
     expires_at: datetime
+
+    # Indica ao frontend se o usuário favoritou o look.
+    is_favorite: bool
+
     items: list[OutfitItemRead]
+
     recommendation_score: float | None = None
     recommendation_reasons: list[str] | None = None
     weather_snapshot: dict | None = None

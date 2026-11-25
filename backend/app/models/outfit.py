@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -24,12 +25,14 @@ class Outfit(Base):
     """
     Representa uma combinação de roupas gerada pelo sistema.
 
-    O look não é cadastrado manualmente pelo usuário.
-    Ele é criado pelo serviço de geração a partir das peças
-    disponíveis no closet.
+    O look é criado pelo serviço de geração a partir das peças
+    disponíveis no closet do perfil.
 
     expires_at controla por quanto tempo a combinação participa
     do histórico usado para evitar repetições.
+
+    is_favorite indica se o usuário deseja preservar o look.
+    Looks favoritados não são removidos pela limpeza de expiração.
     """
 
     __tablename__ = "outfits"
@@ -41,16 +44,13 @@ class Outfit(Base):
     )
 
     # Perfil proprietário do look.
-    # O CASCADE remove os looks caso o perfil seja excluído.
     profile_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("profiles.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    # Contexto informado na solicitação de geração.
-    # Esses campos são opcionais porque o sistema também
-    # consegue gerar uma combinação sem filtros adicionais.
+    # Contexto informado na geração.
     occasion: Mapped[str | None] = mapped_column(
         String(40),
         nullable=True,
@@ -67,28 +67,34 @@ class Outfit(Base):
     )
 
     # Pontuação calculada pelo motor de recomendação.
-    # Pode permanecer nula para looks gerados pelo endpoint antigo.
+    # Pode ser nula em looks gerados pelo endpoint tradicional.
     recommendation_score: Mapped[float | None] = mapped_column(
         Float,
         nullable=True,
     )
 
-    # Explicações legíveis sobre os motivos da recomendação.
+    # Motivos que explicam a recomendação.
     recommendation_reasons: Mapped[list[str] | None] = mapped_column(
         JSONB,
         nullable=True,
     )
 
-    # Retrato meteorológico utilizado no momento da recomendação.
-    # Não depende do cache externo para continuar disponível no histórico.
+    # Retrato meteorológico utilizado na recomendação.
     weather_snapshot: Mapped[dict | None] = mapped_column(
         JSONB,
         nullable=True,
     )
 
+    # Indica se o usuário salvou o look como favorito.
+    # O padrão também é definido no PostgreSQL.
+    is_favorite: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
+
     # Hash dos IDs das peças que compõem o look.
-    # Permite identificar uma combinação sem armazenar
-    # uma lista de IDs em uma coluna textual.
     signature: Mapped[str] = mapped_column(
         String(64),
         nullable=False,
@@ -137,6 +143,13 @@ class Outfit(Base):
             "profile_id",
             "generated_at",
         ),
+        # Otimiza a listagem de favoritos de cada perfil.
+        Index(
+            "ix_outfits_profile_favorite_generated",
+            "profile_id",
+            "is_favorite",
+            "generated_at",
+        ),
     )
 
 
@@ -163,8 +176,7 @@ class OutfitItem(Base):
     )
 
     # Se a peça for excluída do closet, sua associação ao look
-    # também será removida. O histórico não manterá uma referência
-    # inválida a uma peça que não existe mais.
+    # também será removida.
     garment_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("garments.id", ondelete="CASCADE"),

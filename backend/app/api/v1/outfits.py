@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -34,12 +34,7 @@ def generate_outfit(
     db: DatabaseSession,
     profile: AuthenticatedProfile,
 ) -> Outfit:
-    """
-    Gera automaticamente uma combinação de roupas.
-
-    O cliente informa somente o contexto.
-    A seleção das peças é feita pelo serviço de geração.
-    """
+    """Gera automaticamente uma combinação de roupas."""
 
     try:
         return outfit_service.generate_outfit(
@@ -53,6 +48,93 @@ def generate_outfit(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(error),
         ) from None
+
+
+@router.get(
+    "/favorites",
+    response_model=OutfitList,
+)
+def list_favorite_outfits(
+    db: DatabaseSession,
+    profile: AuthenticatedProfile,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> OutfitList:
+    """
+    Lista os looks favoritados do perfil autenticado.
+
+    Diferentemente do histórico comum, esta listagem
+    também inclui favoritos que já passaram de expires_at.
+    """
+
+    items, total = outfit_service.list_favorite_outfits(
+        db=db,
+        profile_id=profile.id,
+        skip=skip,
+        limit=limit,
+    )
+
+    return OutfitList(
+        items=items,
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.put(
+    "/{outfit_id}/favorite",
+    response_model=OutfitRead,
+)
+def favorite_outfit(
+    outfit_id: UUID,
+    db: DatabaseSession,
+    profile: AuthenticatedProfile,
+) -> Outfit:
+    """Marca um look como favorito."""
+
+    try:
+        return outfit_service.set_outfit_favorite(
+            db=db,
+            profile_id=profile.id,
+            outfit_id=outfit_id,
+            is_favorite=True,
+        )
+
+    except outfit_service.OutfitNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Look não encontrado.",
+        ) from None
+
+
+@router.delete(
+    "/{outfit_id}/favorite",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+def unfavorite_outfit(
+    outfit_id: UUID,
+    db: DatabaseSession,
+    profile: AuthenticatedProfile,
+) -> Response:
+    """Remove um look dos favoritos."""
+
+    try:
+        outfit_service.set_outfit_favorite(
+            db=db,
+            profile_id=profile.id,
+            outfit_id=outfit_id,
+            is_favorite=False,
+        )
+
+    except outfit_service.OutfitNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Look não encontrado.",
+        ) from None
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(

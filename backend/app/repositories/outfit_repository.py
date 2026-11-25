@@ -14,10 +14,10 @@ def lock_profile(
     profile_id: UUID,
 ) -> Profile | None:
     """
-    Bloqueia a linha do perfil durante a geração.
+    Bloqueia a linha do perfil durante a geração de looks.
 
-    SELECT FOR UPDATE impede que duas requisições simultâneas
-    do mesmo perfil gerem e registrem a mesma combinação.
+    SELECT FOR UPDATE evita que duas gerações simultâneas
+    do mesmo perfil registrem a mesma combinação.
     """
 
     statement = select(Profile).where(Profile.id == profile_id).with_for_update()
@@ -31,10 +31,13 @@ def delete_expired(
     now: datetime,
 ) -> int:
     """
-    Remove looks vencidos do perfil.
+    Remove looks vencidos que não foram favoritados.
 
-    A exclusão dos OutfitItems acontece pelo CASCADE
-    configurado no banco de dados.
+    Looks favoritados são preservados independentemente
+    de expires_at, pois representam uma escolha explícita
+    do usuário.
+
+    O CASCADE do banco remove os OutfitItems associados.
     """
 
     statement = (
@@ -42,6 +45,7 @@ def delete_expired(
         .where(
             Outfit.profile_id == profile_id,
             Outfit.expires_at <= now,
+            Outfit.is_favorite.is_(False),
         )
         .returning(Outfit.id)
     )
@@ -77,11 +81,20 @@ def list_recent_signatures(
     profile_id: UUID,
     now: datetime,
 ) -> set[str]:
-    """Retorna as assinaturas de looks ainda dentro da validade."""
+    """
+    Retorna as assinaturas que não podem ser reutilizadas.
+
+    Considera:
+    - looks que ainda estão dentro do prazo de retenção;
+    - looks favoritados, mesmo que já tenham vencido.
+
+    Isso evita conflitos com a restrição única
+    uq_outfits_profile_signature.
+    """
 
     statement = select(Outfit.signature).where(
         Outfit.profile_id == profile_id,
-        Outfit.expires_at > now,
+        ((Outfit.expires_at > now) | Outfit.is_favorite.is_(True)),
     )
 
     return set(db.scalars(statement).all())
@@ -95,8 +108,8 @@ def save_outfit(
     """
     Persiste o look e suas peças em uma única transação.
 
-    Se alguma associação falhar, a transação poderá ser revertida
-    sem deixar um look parcialmente cadastrado.
+    Se alguma associação falhar, a transação poderá ser
+    revertida sem deixar um look parcialmente cadastrado.
     """
 
     db.add(outfit)
@@ -120,12 +133,17 @@ def get_by_id(
     db: Session,
     outfit_id: UUID,
     profile_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> Outfit | None:
     """
-    Busca um look com suas peças e respectivas imagens.
+    Busca um look pertencente ao perfil informado.
 
-    Os relacionamentos são carregados antecipadamente
-    para evitar consultas adicionais durante a serialização.
+    Os relacionamentos são carregados antecipadamente para
+    evitar consultas adicionais durante a serialização.
+
+    for_update bloqueia a linha quando uma operação precisa
+    alterar o estado do look.
     """
 
     statement = (
@@ -139,6 +157,9 @@ def get_by_id(
         )
     )
 
+    if for_update:
+        statement = statement.with_for_update()
+
     return db.scalar(statement)
 
 
@@ -150,15 +171,51 @@ def list_by_profile(
     limit: int,
 ) -> tuple[list[Outfit], int]:
     """
-    Lista looks válidos com paginação.
+    Lista looks ainda válidos com paginação.
 
-    Carrega as peças e suas imagens em consultas agrupadas,
-    evitando o problema N+1.
+    Favoritos vencidos são preservados, mas aparecem na
+    listagem específica de favoritos, não no histórico comum.
     """
 
     base_statement = select(Outfit).where(
         Outfit.profile_id == profile_id,
         Outfit.expires_at > now,
+    )
+
+    total_statement = select(func.count()).select_from(base_statement.subquery())
+
+    total = db.scalar(total_statement) or 0
+
+    statement = (
+        base_statement.options(
+            selectinload(Outfit.items).selectinload(OutfitItem.garment).selectinload(Garment.images)
+        )
+        .order_by(Outfit.generated_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+
+    items = list(db.scalars(statement).all())
+
+    return items, total
+
+
+def list_favorites(
+    db: Session,
+    profile_id: UUID,
+    skip: int,
+    limit: int,
+) -> tuple[list[Outfit], int]:
+    """
+    Lista os looks favoritados do perfil.
+
+    Não filtra expires_at: um look favoritado continua
+    disponível mesmo depois do prazo normal de retenção.
+    """
+
+    base_statement = select(Outfit).where(
+        Outfit.profile_id == profile_id,
+        Outfit.is_favorite.is_(True),
     )
 
     total_statement = select(func.count()).select_from(base_statement.subquery())
