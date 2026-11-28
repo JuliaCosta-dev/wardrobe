@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -19,6 +20,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.outfit_usage import OutfitUsage
 
 
 class Outfit(Base):
@@ -125,14 +129,16 @@ class Outfit(Base):
         order_by="OutfitItem.created_at",
     )
 
+    usages: Mapped[list[OutfitUsage]] = relationship(
+        "OutfitUsage",
+        back_populates="outfit",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     __table_args__ = (
         # Uma mesma combinação não pode ser registrada duas vezes
         # para o mesmo perfil enquanto o registro anterior existir.
-        UniqueConstraint(
-            "profile_id",
-            "signature",
-            name="uq_outfits_profile_signature",
-        ),
         Index(
             "ix_outfits_profile_expiration",
             "profile_id",

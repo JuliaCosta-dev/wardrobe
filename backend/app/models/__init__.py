@@ -1,5 +1,6 @@
 from app.models.garment import Garment, GarmentImage
 from app.models.outfit import Outfit, OutfitItem
+from app.models.outfit_usage import OutfitUsage
 from app.models.profile import Profile
 from app.models.recommendation_feedback import RecommendationFeedback
 from app.models.refresh_session import RefreshSession
@@ -14,6 +15,7 @@ __all__ = [
     "GarmentImage",
     "Outfit",
     "OutfitItem",
+    "OutfitUsage",
     "WeatherCache",
     "RecommendationFeedback",
 ]

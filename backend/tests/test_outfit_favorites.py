@@ -1,3 +1,4 @@
+
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -28,7 +29,11 @@ def create_user(client, email: str) -> dict[str, str]:
 def get_profile_id(db_session, email: str):
     """Localiza o perfil pelo e-mail do usuário criado no teste."""
 
-    statement = select(Profile).join(User, User.id == Profile.user_id).where(User.email == email)
+    statement = (
+        select(Profile)
+        .join(User, User.id == Profile.user_id)
+        .where(User.email == email)
+    )
 
     profile = db_session.scalar(statement)
 
@@ -140,6 +145,7 @@ def test_unfavorite_outfit_is_idempotent(client, db_session):
 
     email = "unfavorite-idempotent@example.com"
     headers = create_user(client, email)
+
     profile_id = get_profile_id(db_session, email)
 
     outfit = create_outfit(db_session, profile_id)
@@ -294,8 +300,8 @@ def test_favorite_nonexistent_outfit_returns_404(client):
 
 def test_favorite_preserves_expired_outfit(client, db_session):
     """
-    Um favorito vencido continua existindo após a limpeza
-    realizada pelo endpoint de histórico.
+    Um look favoritado e expirado permanece no histórico permanente,
+    no banco de dados e na listagem de favoritos.
     """
 
     email = "favorite-expiration@example.com"
@@ -303,20 +309,22 @@ def test_favorite_preserves_expired_outfit(client, db_session):
     profile_id = get_profile_id(db_session, email)
 
     outfit = create_outfit(db_session, profile_id)
+    outfit_id = outfit.id
 
-    # Primeiro, o usuário favoritou o look dentro da validade.
+    # O usuário favorita o look enquanto ele ainda está dentro do prazo.
     favorite_response = client.put(
-        f"/api/v1/outfits/{outfit.id}/favorite",
+        f"/api/v1/outfits/{outfit_id}/favorite",
         headers=headers,
     )
 
     assert favorite_response.status_code == 200
+    assert favorite_response.json()["is_favorite"] is True
 
-    # Simula a passagem do prazo de retenção.
-    outfit.expires_at = datetime.now(UTC) - timedelta(days=1)
+    # Simula um look cuja data de expiração já passou.
+    outfit.expires_at = datetime.now(UTC) - timedelta(days=31)
     db_session.commit()
 
-    # A consulta do histórico executa a limpeza de vencidos.
+    # O histórico geral deve continuar incluindo o look.
     history_response = client.get(
         "/api/v1/outfits",
         headers=headers,
@@ -324,19 +332,22 @@ def test_favorite_preserves_expired_outfit(client, db_session):
 
     assert history_response.status_code == 200
 
-    # O look não aparece no histórico comum.
-    history_ids = {item["id"] for item in history_response.json()["items"]}
+    history_ids = {
+        item["id"]
+        for item in history_response.json()["items"]
+    }
 
-    assert str(outfit.id) not in history_ids
+    assert str(outfit_id) in history_ids
 
-    # Mas continua no banco e na listagem de favoritos.
+    # O look continua salvo no banco.
     db_session.expire_all()
 
-    saved_outfit = db_session.get(Outfit, outfit.id)
+    saved_outfit = db_session.get(Outfit, outfit_id)
 
     assert saved_outfit is not None
     assert saved_outfit.is_favorite is True
 
+    # O look expirado também continua aparecendo nos favoritos.
     favorites_response = client.get(
         "/api/v1/outfits/favorites",
         headers=headers,
@@ -344,13 +355,22 @@ def test_favorite_preserves_expired_outfit(client, db_session):
 
     assert favorites_response.status_code == 200
 
-    favorite_ids = {item["id"] for item in favorites_response.json()["items"]}
+    favorite_ids = {
+        item["id"]
+        for item in favorites_response.json()["items"]
+    }
 
-    assert str(outfit.id) in favorite_ids
+    assert str(outfit_id) in favorite_ids
 
 
-def test_expired_non_favorite_outfit_is_removed(client, db_session):
-    """Looks vencidos e não favoritados continuam sendo removidos."""
+def test_expired_non_favorite_outfit_remains_in_permanent_history(
+    client,
+    db_session,
+):
+    """
+    Um look expirado e não favoritado permanece no banco
+    e continua aparecendo no histórico permanente.
+    """
 
     email = "expired-non-favorite@example.com"
     headers = create_user(client, email)
@@ -360,9 +380,12 @@ def test_expired_non_favorite_outfit_is_removed(client, db_session):
         db_session,
         profile_id,
         is_favorite=False,
-        expires_at=datetime.now(UTC) - timedelta(days=1),
+        expires_at=datetime.now(UTC) - timedelta(days=31),
     )
 
+    outfit_id = outfit.id
+
+    # Consulta o histórico mesmo depois da expiração.
     response = client.get(
         "/api/v1/outfits",
         headers=headers,
@@ -370,6 +393,18 @@ def test_expired_non_favorite_outfit_is_removed(client, db_session):
 
     assert response.status_code == 200
 
+    history_ids = {
+        item["id"]
+        for item in response.json()["items"]
+    }
+
+    # A expiração não remove o look do histórico.
+    assert str(outfit_id) in history_ids
+
+    # A expiração também não remove o registro do banco.
     db_session.expire_all()
 
-    assert db_session.get(Outfit, outfit.id) is None
+    saved_outfit = db_session.get(Outfit, outfit_id)
+
+    assert saved_outfit is not None
+    assert saved_outfit.is_favorite is False

@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 from typing import Literal
 from uuid import UUID
 
@@ -13,6 +14,13 @@ OutfitSeason = Literal[
     "autumn",
     "winter",
 ]
+
+
+class OutfitOrder(str, Enum):
+    """Ordem de classificação do histórico de looks."""
+
+    ASC = "asc"
+    DESC = "desc"
 
 
 class OutfitGenerateRequest(BaseModel):

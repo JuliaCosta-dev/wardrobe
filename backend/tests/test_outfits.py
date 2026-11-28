@@ -1,5 +1,7 @@
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
 
+from PIL import Image
 from sqlalchemy import select
 
 from app.models.outfit import Outfit
@@ -298,11 +300,11 @@ def test_user_cannot_access_another_users_outfit(client):
     assert response.status_code == 404
 
 
-def test_expired_outfit_is_removed_and_combination_can_be_reused(
+def test_expired_outfit_remains_in_permanent_history(
     client,
     db_session,
 ):
-    headers = create_user(client, "expired-outfit@example.com")
+    headers = create_user(client, "permanent-history@example.com")
     create_complete_closet(client, headers)
 
     generated = client.post(
@@ -315,31 +317,36 @@ def test_expired_outfit_is_removed_and_combination_can_be_reused(
 
     outfit_id = generated.json()["id"]
 
-    # Recupera o perfil criado para alterar a validade diretamente
-    # no banco de testes.
+    # Recupera o perfil criado para confirmar que o usuário existe.
     profile = db_session.scalar(select(Profile).where(Profile.display_name == "Outfit User"))
 
     assert profile is not None
 
+    # Recupera o look e simula sua expiração.
     outfit = db_session.get(Outfit, outfit_id)
 
     assert outfit is not None
 
-    outfit.expires_at = datetime.now(UTC) - timedelta(days=1)
+    outfit.expires_at = datetime.now(UTC) - timedelta(days=31)
     db_session.commit()
 
-    # A próxima geração remove o registro vencido antes de consultar
-    # as combinações utilizadas.
-    response = client.post(
-        "/api/v1/outfits/generate",
+    # O look expirado continua acessível individualmente.
+    detail = client.get(
+        f"/api/v1/outfits/{outfit_id}",
         headers=headers,
-        json={},
     )
 
-    assert response.status_code == 201
-    assert response.json()["id"] != outfit_id
+    assert detail.status_code == 200
 
-    assert db_session.get(Outfit, outfit_id) is None
+    # O look expirado continua aparecendo no histórico.
+    history = client.get(
+        "/api/v1/outfits",
+        headers=headers,
+    )
+
+    assert history.status_code == 200
+
+    assert any(item["id"] == outfit_id for item in history.json()["items"])
 
 
 def test_generation_rejects_invalid_formality(client):
@@ -470,10 +477,6 @@ def test_outfit_list_rejects_invalid_limit(client):
 
 
 def test_generated_outfit_includes_garment_primary_image(client):
-    from io import BytesIO
-
-    from PIL import Image
-
     headers = create_user(
         client,
         "outfit-primary-image@example.com",

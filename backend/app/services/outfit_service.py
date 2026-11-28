@@ -8,7 +8,8 @@ from app.repositories import outfit_repository as repository
 from app.schemas.outfits import OutfitGenerateRequest
 from app.services import outfit_generator
 
-# Tempo durante o qual uma combinação participa do histórico.
+# A validade controla somente a regra de não repetição.
+# Ela não representa o tempo de armazenamento do histórico.
 OUTFIT_RETENTION_DAYS = 30
 
 
@@ -25,32 +26,15 @@ def generate_outfit(
     profile_id: UUID,
     request: OutfitGenerateRequest,
 ) -> Outfit:
-    """
-    Gera e registra um look para o perfil autenticado.
-
-    Toda a operação é executada em uma transação:
-    - bloqueio do perfil;
-    - remoção de looks vencidos não favoritados;
-    - consulta das peças;
-    - geração da combinação;
-    - gravação do look e seus itens.
-    """
+    """Gera e registra um look sem apagar o histórico anterior."""
 
     now = datetime.now(UTC)
 
     try:
-        # Serializa as gerações do mesmo perfil.
         profile = repository.lock_profile(db, profile_id)
 
         if profile is None:
             raise OutfitGenerationError("Perfil não encontrado.")
-
-        # Favoritos vencidos não são removidos por esta operação.
-        repository.delete_expired(
-            db=db,
-            profile_id=profile_id,
-            now=now,
-        )
 
         garments = repository.list_available_garments(
             db=db,
@@ -72,9 +56,6 @@ def generate_outfit(
                 formality=request.formality,
             )
         except outfit_generator.OutfitCombinationError as error:
-            # Confirma a limpeza dos looks vencidos mesmo quando
-            # não foi possível gerar uma nova combinação.
-            db.commit()
             raise OutfitGenerationError(str(error)) from None
 
         outfit = Outfit(
@@ -96,7 +77,6 @@ def generate_outfit(
 
         db.commit()
 
-        # Reconsulta o registro para carregar os relacionamentos.
         saved_outfit = repository.get_by_id(
             db=db,
             outfit_id=outfit.id,
@@ -109,6 +89,7 @@ def generate_outfit(
         return saved_outfit
 
     except OutfitGenerationError:
+        db.rollback()
         raise
 
     except Exception:
@@ -121,39 +102,13 @@ def get_outfit(
     profile_id: UUID,
     outfit_id: UUID,
 ) -> Outfit | None:
-    """
-    Busca um look pertencente ao perfil.
+    """Consulta um look independentemente de sua data de expiração."""
 
-    Looks vencidos não favoritados são removidos.
-    Looks favoritados continuam acessíveis após a expiração.
-    """
-
-    now = datetime.now(UTC)
-
-    try:
-        repository.delete_expired(
-            db,
-            profile_id,
-            now,
-        )
-        db.commit()
-
-        outfit = repository.get_by_id(
-            db=db,
-            outfit_id=outfit_id,
-            profile_id=profile_id,
-        )
-
-        if outfit is not None:
-            # Proteção adicional para registros vencidos.
-            if outfit.expires_at <= now and not outfit.is_favorite:
-                return None
-
-        return outfit
-
-    except Exception:
-        db.rollback()
-        raise
+    return repository.get_by_id(
+        db=db,
+        outfit_id=outfit_id,
+        profile_id=profile_id,
+    )
 
 
 def list_outfits(
@@ -161,30 +116,33 @@ def list_outfits(
     profile_id: UUID,
     skip: int,
     limit: int,
+    *,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    occasion: str | None = None,
+    season: str | None = None,
+    formality: int | None = None,
+    is_favorite: bool | None = None,
+    order: str = "desc",
 ) -> tuple[list[Outfit], int]:
-    """Lista o histórico ainda válido do perfil."""
+    """Lista o histórico permanente com filtros."""
 
-    now = datetime.now(UTC)
+    if start_date and end_date and start_date > end_date:
+        raise ValueError("A data inicial não pode ser posterior à data final.")
 
-    try:
-        repository.delete_expired(
-            db,
-            profile_id,
-            now,
-        )
-        db.commit()
-
-        return repository.list_by_profile(
-            db=db,
-            profile_id=profile_id,
-            now=now,
-            skip=skip,
-            limit=limit,
-        )
-
-    except Exception:
-        db.rollback()
-        raise
+    return repository.list_by_profile(
+        db=db,
+        profile_id=profile_id,
+        skip=skip,
+        limit=limit,
+        start_date=start_date,
+        end_date=end_date,
+        occasion=occasion,
+        season=season,
+        formality=formality,
+        is_favorite=is_favorite,
+        order=order,
+    )
 
 
 def set_outfit_favorite(
@@ -194,15 +152,7 @@ def set_outfit_favorite(
     *,
     is_favorite: bool,
 ) -> Outfit:
-    """
-    Favorita ou desfavorita um look do perfil autenticado.
-
-    A operação é idempotente:
-    - favoritar um look já favoritado mantém True;
-    - desfavoritar um look já desfavoritado mantém False.
-
-    O bloqueio da linha evita alterações simultâneas conflitantes.
-    """
+    """Favorita ou desfavorita um look do perfil autenticado."""
 
     try:
         outfit = repository.get_by_id(
@@ -215,24 +165,9 @@ def set_outfit_favorite(
         if outfit is None:
             raise OutfitNotFoundError("Look não encontrado.")
 
-        # Um look vencido e não favoritado não deve ser
-        # recuperado apenas porque alguém tentou favoritar.
-        now = datetime.now(UTC)
-
-        if outfit.expires_at <= now and not outfit.is_favorite:
-            repository.delete_expired(
-                db=db,
-                profile_id=profile_id,
-                now=now,
-            )
-            db.commit()
-            raise OutfitNotFoundError("Look não encontrado.")
-
         outfit.is_favorite = is_favorite
 
         db.commit()
-
-        # Atualiza os valores e relacionamentos após o commit.
         db.refresh(outfit)
 
         return (
@@ -258,16 +193,11 @@ def list_favorite_outfits(
     skip: int,
     limit: int,
 ) -> tuple[list[Outfit], int]:
-    """Lista os favoritos do perfil, inclusive os já vencidos."""
+    """Lista os favoritos do perfil, independentemente da expiração."""
 
-    try:
-        return repository.list_favorites(
-            db=db,
-            profile_id=profile_id,
-            skip=skip,
-            limit=limit,
-        )
-
-    except Exception:
-        db.rollback()
-        raise
+    return repository.list_favorites(
+        db=db,
+        profile_id=profile_id,
+        skip=skip,
+        limit=limit,
+    )

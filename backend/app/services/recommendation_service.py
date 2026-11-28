@@ -9,8 +9,6 @@ from app.schemas.recommendations import OutfitRecommendationRequest
 from app.schemas.weather import WeatherRead
 from app.services import contextual_outfit_generator, weather_service
 
-OUTFIT_RETENTION_DAYS = 30
-
 
 class RecommendationError(Exception):
     """Erro de negócio durante a recomendação."""
@@ -30,13 +28,11 @@ def recommend_outfit(
     Em seguida:
     - verifica se as recomendações estão habilitadas;
     - bloqueia o perfil;
-    - remove looks expirados;
     - busca peças disponíveis;
     - consulta combinações já utilizadas;
     - calcula a recomendação;
     - persiste o look e seus itens.
     """
-
     weather = weather_service.get_weather(
         db=db,
         profile=profile,
@@ -59,12 +55,6 @@ def recommend_outfit(
 
         if locked_profile is None:
             raise RecommendationError("Perfil não encontrado.")
-
-        outfit_repository.delete_expired(
-            db=db,
-            profile_id=profile.id,
-            now=now,
-        )
 
         garments = outfit_repository.list_available_garments(
             db=db,
@@ -96,9 +86,6 @@ def recommend_outfit(
             )
 
         except contextual_outfit_generator.ContextualOutfitError as error:
-            # Mantém a limpeza dos looks expirados mesmo se não houver
-            # uma nova combinação disponível.
-            db.commit()
             raise RecommendationError(str(error)) from None
 
         outfit = Outfit(
@@ -108,7 +95,7 @@ def recommend_outfit(
             formality=request.formality,
             signature=signature,
             generated_at=now,
-            expires_at=now + timedelta(days=OUTFIT_RETENTION_DAYS),
+            expires_at=now + timedelta(days=30),
             recommendation_score=score,
             recommendation_reasons=reasons,
             weather_snapshot=weather_data,
@@ -134,6 +121,7 @@ def recommend_outfit(
         return saved_outfit, weather
 
     except RecommendationError:
+        db.rollback()
         raise
 
     except Exception:

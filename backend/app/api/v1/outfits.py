@@ -1,4 +1,5 @@
-from typing import Annotated
+from datetime import datetime
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -146,15 +147,36 @@ def list_outfits(
     profile: AuthenticatedProfile,
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    occasion: Annotated[str | None, Query(min_length=1, max_length=40)] = None,
+    season: Literal["spring", "summer", "autumn", "winter"] | None = None,
+    formality: Annotated[int | None, Query(ge=1, le=4)] = None,
+    is_favorite: bool | None = None,
+    order: Literal["asc", "desc"] = "desc",
 ) -> OutfitList:
-    """Lista os looks ainda válidos do perfil autenticado."""
+    """Lista todo o histórico permanente do perfil autenticado."""
 
-    items, total = outfit_service.list_outfits(
-        db=db,
-        profile_id=profile.id,
-        skip=skip,
-        limit=limit,
-    )
+    try:
+        items, total = outfit_service.list_outfits(
+            db=db,
+            profile_id=profile.id,
+            skip=skip,
+            limit=limit,
+            start_date=start_date,
+            end_date=end_date,
+            occasion=occasion,
+            season=season,
+            formality=formality,
+            is_favorite=is_favorite,
+            order=order,
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from None
 
     return OutfitList(
         items=items,
